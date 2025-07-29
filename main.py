@@ -10,22 +10,16 @@ from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-
-
 load_dotenv()  # loads variables from .env
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASS = os.getenv("RABBITMQ_PASS")
-
 EXCHANGE     = os.getenv("EXCHANGE")
 QUEUE        = os.getenv("QUEUE")
 ROUTING_KEY  = os.getenv("ROUTING_KEY")
-
-
 s3 = boto3.client('s3')
-
 
 def create_callback(db):
     def on_message_test(channel, method, properties, body):
@@ -44,7 +38,7 @@ def create_callback(db):
             subject_data = db.fetch_one(subject_query, subject_params)
             if not subject_data:
                 raise ValueError("Missing subject data")
-
+            
             prompt = PromptClient(district_data, subject_data, parse_client.get_description(), 
                                   parse_client.get_max_points(), parse_client.get_question_count(), parse_client.get_grade_level(),
                                   parse_client.get_difficulty())
@@ -84,7 +78,6 @@ def create_callback(db):
 
 def main():
     db = PostgresClient()
-
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
     params = pika.ConnectionParameters(
         host=RABBITMQ_HOST, 
@@ -93,7 +86,6 @@ def main():
         heartbeat=60, 
         blocked_connection_timeout=30
     )
-
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
     channel.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
@@ -105,7 +97,6 @@ def main():
 
     callback = create_callback(db)
     channel.basic_consume(queue=QUEUE, on_message_callback=callback)
-
     try:
         channel.start_consuming()
     except KeyboardInterrupt:
