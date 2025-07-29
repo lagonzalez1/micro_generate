@@ -1,47 +1,96 @@
-# micro_generate
-With the help of LLM, this micro service will be utilized in conjunction with AmazonMQ(rabbitMq) to listen to request from client.
+micro_generate
 
-## Table of content
+A Python microservice that leverages large language models (LLMs) to generate assessments on the fly. It listens for requests via RabbitMQ (Amazon MQ) and returns JSON-formatted quizzes.
+
+Table of Contents
+	1.	Installation
+	2.	Running
+	3.	Features
+	4.	Improvements
+	5.	Architecture
+	6.	Purpose
+
+⸻
 
 1. Installation
+	1.	Clone the repository
+
+git clone https://github.com/<your-org>/micro_generate.git
+
+
+	2.	Change into the project directory
+
+cd micro_generate
+
+
+	3.	(Optional) Create a virtual environment
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+
+	4.	Install dependencies
+
+pip install -r requirements.txt
+
+
+	5.	Run the service
+
+python3 main.py
+
+
+
+⸻
+
 2. Running
+	•	Development:
+
+python3 main.py
+
+
+	•	Production (Docker + ECS Fargate):
+	1.	Build the Docker image
+
+docker build -t micro_generate:latest .
+
+
+	2.	Tag and push (ECR, Docker Hub, etc.)
+
+docker tag micro_generate:latest <registry>/micro_generate:latest
+docker push <registry>/micro_generate:latest
+
+
+	3.	Deploy on ECS Fargate or your preferred container platform.
+
+⸻
+
 3. Features
-4. Improvments
-5. Purpose
+	•	Context-aware prompting: Dynamic API calls to your chosen LLM for real-time assessment generation.
+	•	JSON output: Returns quizzes, tests, and homework in a structured format.
+	•	Configurable prompts: Customize and extend prompts via prompts.py and prompts_client.py.
 
+⸻
 
-## 1. Installation
+4. Improvements
+	•	Token management: Handle prompt and response size limits or automatically chunk large inputs.
+	•	Input sanitization: Validate and clean user inputs to prevent prompt injection.
+	•	Schema enforcement: Ensure the LLM output strictly follows the expected JSON schema for frontend compatibility.
 
-- Ensure you have the latest python3, pip (Package manager)
-1. $ git clone this repo
-2. cd into repo
-3. Install requirements.txt by running 
- - $ pip install -r requirements.txt
-4. $ python3 main.py
+⸻
 
+5. Architecture
 
-## 2. Running
+Frontend → Go backend (RabbitMQ producer) → RabbitMQ → ECS Fargate (Python consumer)
 
-To run this script in during testing, its best to just use this command python3 main.py.
-For production, the idea is to dockerize. Push to ECR or Docker hub and run as a managed service. 
-Doing so ECS Faregate runs the docker iamge and forget about it. Unless you run into issues. 
+	•	RabbitMQ: Decouples request submission from processing.
+	•	ECS Fargate: Hosts the always-on Python worker, auto-scales, and manages health checks.
+	•	LLM integration: Invoke OpenAI, Amazon Bedrock, or other model endpoints for content generation.
 
+⸻
 
-## 3. Featrues
+6. Purpose
 
-Run context aware (Prompting) API calls to your model of choice. For this application its focused on the creating assessments in the form of JSON.
-This is ideally used to create on the fly quick assessments based on context described by the user. Check out Prompts.py and PromptsClient.py.
-
-
-## 4. Improvments
-
-This is my first attempt in Prompting "Enmgineering", so my only conserns as of now are token limits and possible prompt injections. The output needs to be in the format described in the Prompts.py example section. Otherwise my frontned will not be able to parse correctly. 
-
-
-## 5. Purpose
-
-Frontend 
-    -> Go Backend (RabbitMQ producer) 
-        -> RabbitMQ (Channel) 
-            -> ECS Faregate (Consumer) Microservices
-
+This microservice streamlines the creation of educational assessments, reducing overhead and accelerating content delivery in tutoring and learning platforms. It enables:
+	•	Rapid quiz generation based on user-defined criteria.
+	•	On-demand lesson planning tied to generated assessments.
+	•	Cloud-native deployment for scalable, reliable service.
