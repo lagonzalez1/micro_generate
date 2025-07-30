@@ -9,6 +9,7 @@ from PromptClient import PromptClient
 from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+import ssl
 
 load_dotenv()  # loads variables from .env
 
@@ -19,6 +20,7 @@ RABBITMQ_PASS = os.getenv("RABBITMQ_PASS")
 EXCHANGE     = os.getenv("EXCHANGE")
 QUEUE        = os.getenv("QUEUE")
 ROUTING_KEY  = os.getenv("ROUTING_KEY")
+RABBIT_LOCAL  = os.getenv("RABBIT_LOCAL")
 s3 = boto3.client('s3')
 
 def create_callback(db):
@@ -79,13 +81,27 @@ def create_callback(db):
 def main():
     db = PostgresClient()
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    params = pika.ConnectionParameters(
-        host=RABBITMQ_HOST, 
-        port=RABBITMQ_PORT, 
-        credentials=credentials, 
-        heartbeat=60, 
-        blocked_connection_timeout=30
-    )
+    params = None
+    if RABBIT_LOCAL == str(1) or RABBIT_LOCAL == 1:
+        params = pika.ConnectionParameters(
+            host=RABBITMQ_HOST, 
+            port=RABBITMQ_PORT, 
+            credentials=credentials, 
+            heartbeat=60, 
+            blocked_connection_timeout=30
+        )
+    else:
+        ssl_context = ssl.create_default_context()
+        params = pika.ConnectionParameters(
+            host=RABBITMQ_HOST, 
+            port=RABBITMQ_PORT,
+            virtual_host="/",
+            credentials=credentials, 
+            heartbeat=60, 
+            blocked_connection_timeout=30,
+            ssl_options=pika.SSLOptions(context=ssl_context)
+        )
+    
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
     channel.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
