@@ -40,6 +40,34 @@ class PostgresClient:
 			"""
 			cursor.execute(query, (status, task_id))
 
+	def get_district_data(self, params):
+		try:
+			district_query = "SELECT name, city, state, region FROM stu_tracker.District WHERE organization_id = %s AND id = %s"
+			return self.fetch_one(district_query, params)
+		except Exception as e:
+			raise RuntimeError("unable to get district data from database")
+	
+	def get_subject_data(self, params):
+		try:	
+			subject_query = "SELECT title, description FROM stu_tracker.Subjects WHERE organization_id = %s AND id = %s"
+			return self.fetch_one(subject_query, params)
+		except Exception as e:
+			raise RuntimeError("unable to get subject data")
+	
+	def update_question_task(self, params):
+		try:	
+			success_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s WHERE s3_output_key = %s;"
+			return self.execute(success_query, params)
+		except Exception as e:
+			raise RuntimeError("unable to get update question task")
+		
+	def update_question_task_retry(self, params):
+		try:	
+			retry_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s, retry_count = retry_count + 1 WHERE s3_output_key = %s;"
+			return self.execute(retry_query, params)
+		except Exception as e:
+			raise RuntimeError("unable to update retry question task")
+			
 	def close(self):
 		return self.conn.close()
 		

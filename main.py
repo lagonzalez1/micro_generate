@@ -4,8 +4,11 @@ import pika
 import psycopg2
 from dotenv import load_dotenv
 from PostgresClient import PostgresClient 
+from RabbitMQ import RabbitMQ
 from Client import Client
 from PromptClient import PromptClient
+from Model import Model
+from GeminModel import GeminiModel
 from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -13,65 +16,64 @@ import ssl
 
 load_dotenv()  # loads variables from .env
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
-RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT"))
-RABBITMQ_USER = os.getenv("RABBITMQ_USER")
-RABBITMQ_PASS = os.getenv("RABBITMQ_PASS")
 EXCHANGE     = os.getenv("EXCHANGE")
 QUEUE        = os.getenv("QUEUE")
 ROUTING_KEY  = os.getenv("ROUTING_KEY")
 RABBIT_LOCAL  = os.getenv("RABBIT_LOCAL")
 s3 = boto3.client('s3')
+PREFETCH_COUNT = 1
+EXCHANGE_TYPE = "direct"
 
 def create_callback(db):
     def on_message_test(channel, method, properties, body):
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         parse_client = Client(body)
         try:
             # Query the postgres db to get the values of district, subject
-            district_query = "SELECT name, city, state, region FROM stu_tracker.District WHERE organization_id = %s AND id = %s"
-            district_params = (parse_client.get_organization_id(), parse_client.get_district_id())
-            district_data = db.fetch_one(district_query, district_params)
+            district_data = db.get_district_data((parse_client.get_organization_id(), parse_client.get_district_id()))
             if not district_data:
+                channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 raise ValueError("Missing district data")
 
-            subject_query = "SELECT title, description FROM stu_tracker.Subjects WHERE organization_id = %s AND id = %s"
-            subject_params = (parse_client.get_organization_id(), parse_client.get_subject_id())            
-            subject_data = db.fetch_one(subject_query, subject_params)
+            subject_data = db.get_subject_data((parse_client.get_organization_id(), parse_client.get_subject_id()))
             if not subject_data:
+                channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 raise ValueError("Missing subject data")
-            
+
+            # Right now the values must be provided. 
+            # It should be possible to not include district
             prompt = PromptClient(district_data, subject_data, parse_client.get_description(), 
                                   parse_client.get_max_points(), parse_client.get_question_count(), parse_client.get_grade_level(),
                                   parse_client.get_difficulty())
-            print(prompt.get_token_length())
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt.get_prompt()
-            )
+            print(f"Input token count: '{prompt.get_token_length()}'")
+            # Invoke Amazon Bedrock model
+            model = Model(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=2000)
+            # Invoke Gemini model for testing
+            # model = GeminiModel(prompt=prompt.get_prompt())
+            response = model.valid_response()
+            print("The outputkey: ",parse_client.get_output_key())
             if response:
-                print(len(response.text))
-                success_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s WHERE s3_output_key = %s;"
-                success_params = ("COMPLETE", parse_client.get_output_key())
                 try:
                     s3.put_object(
                         Bucket="tracker-client-storage",
                         Key=parse_client.get_output_key(),
-                        Body=response.text,
+                        Body=model.get_generation(),
                         ContentType='application/json'
                     )
-                    success_data = db.execute(success_query, success_params)
-                    if success_data:
+                    success_request = db.update_question_task(("COMPLETE", parse_client.get_output_key()))
+                    if success_request:
                         channel.basic_ack(delivery_tag=method.delivery_tag)
+                    else:
+                        channel.basic_nack(delivery_tag=method.delivery_tag,requeue=False)
                 except (BotoCoreError, ClientError) as e:
                     print("unable to upload to s3", e)
-                    channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)                    
+                    channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)                 
             else:
                 # Did not get a response so try again log to db as well
-                retry_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s, retry_count = retry_count + 1 WHERE s3_output_key = %s;"
-                retry_params = ("RETRY", parse_client.get_output_key())
-                success_data = db.execute(retry_query, retry_params)
-                channel.basic_ack(delivery_tag=method.delivery_tag, requeue=True)
+                retry_request = db.update_question_task_retry(("RETRY", parse_client.get_output_key()))
+                if retry_request:
+                    channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                else:
+                    channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         except Exception as e:
             print("error occured: ", e)
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
@@ -80,39 +82,14 @@ def create_callback(db):
 
 def main():
     db = PostgresClient()
-    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    params = None
-    if RABBIT_LOCAL == str(1) or RABBIT_LOCAL == 1:
-        params = pika.ConnectionParameters(
-            host=RABBITMQ_HOST, 
-            port=RABBITMQ_PORT, 
-            credentials=credentials, 
-            heartbeat=60, 
-            blocked_connection_timeout=30
-        )
-    else:
-        ssl_context = ssl.create_default_context()
-        params = pika.ConnectionParameters(
-            host=RABBITMQ_HOST, 
-            port=RABBITMQ_PORT,
-            virtual_host="/",
-            credentials=credentials, 
-            heartbeat=60, 
-            blocked_connection_timeout=30,
-            ssl_options=pika.SSLOptions(context=ssl_context)
-        )
+    rabbit_assessment_queue = RabbitMQ(PREFETCH_COUNT, EXCHANGE, QUEUE, ROUTING_KEY, EXCHANGE_TYPE)
     
-    connection = pika.BlockingConnection(params)
-    channel = connection.channel()
-    channel.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
-    channel.queue_declare(queue=QUEUE, durable=True)
-    channel.queue_bind(exchange=EXCHANGE, queue=QUEUE, routing_key=ROUTING_KEY)
+    callback = create_callback(db)
+    rabbit_assessment_queue.set_callback(callback)
+    channel = rabbit_assessment_queue.get_channel()
+    connection = rabbit_assessment_queue.get_connection()
 
     print(f"[*] Waiting for messages in '{QUEUE}'. To exit press CTRL+C")
-    channel.basic_qos(prefetch_count=1)
-
-    callback = create_callback(db)
-    channel.basic_consume(queue=QUEUE, on_message_callback=callback)
     try:
         channel.start_consuming()
     except KeyboardInterrupt:
@@ -120,6 +97,7 @@ def main():
     finally:
         channel.close()
         connection.close()
+        db.close()
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ def get_user_description_prompt(description_context):
 
 def get_examples_prompt():
     return """
-    # Example response
+    # Response must be in the following format.. 
     { questions: [
         {
             "question_id": null,
