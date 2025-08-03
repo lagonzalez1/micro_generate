@@ -9,7 +9,7 @@ MODEL_ID = os.getenv("MODEL_ID")
 
 bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 
-class Model:
+class AmazonModel:
     def __init__(self, prompt: str, temp: float, top_p: float, max_gen_len: int):
         self.prompt = prompt 
         self.temp = temp
@@ -38,6 +38,20 @@ class Model:
         except (ClientError, Exception) as e:
             print(f"Error: Can't invoke '{MODEL_ID}. Reason: '{e}''")
 
+    def input_token(self):
+        response_body = json.loads(self.response.get("body").read())
+        usage = response_body.get("usage")
+        return usage.get("inputTokens")
+
+    def output_token(self):
+        response_body = json.loads(self.response.get("body").read())
+        usage = response_body.get("usage")
+        return usage.get("outputTokens")
+
+    def total_token(self):
+        response_body = json.loads(self.response.get("body").read())
+        usage = response_body.get("usage")
+        return usage.get("totalTokens")
 
     def generate_meta_model(self) ->dict:
         try:

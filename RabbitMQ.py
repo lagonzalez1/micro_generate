@@ -4,10 +4,6 @@ import json
 import pika
 import psycopg2
 from dotenv import load_dotenv
-from PostgresClient import PostgresClient 
-from Client import Client
-from PromptClient import PromptClient
-from Model import Model
 from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError

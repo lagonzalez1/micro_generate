@@ -7,7 +7,7 @@ from PostgresClient import PostgresClient
 from RabbitMQ import RabbitMQ
 from Client import Client
 from PromptClient import PromptClient
-from Model import Model
+from AmazonModel import AmazonModel
 from GeminModel import GeminiModel
 from google import genai
 import boto3
@@ -46,7 +46,9 @@ def create_callback(db):
                                   parse_client.get_difficulty())
             print(f"Input token count: '{prompt.get_token_length()}'")
             # Invoke Amazon Bedrock model
-            model = Model(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=2000)
+            model = AmazonModel(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=3072)
+            #print(f"Total tokens: {model.total_token()} ")
+
             # Invoke Gemini model for testing
             # model = GeminiModel(prompt=prompt.get_prompt())
             response = model.valid_response()
