@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import pika
 import psycopg2
 from dotenv import load_dotenv
@@ -32,6 +33,7 @@ def create_callback(db):
             district_data = db.get_district_data((parse_client.get_organization_id(), parse_client.get_district_id()))
             if not district_data:
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                logging.basicConfig()
                 raise ValueError("Missing district data")
 
             subject_data = db.get_subject_data((parse_client.get_organization_id(), parse_client.get_subject_id()))

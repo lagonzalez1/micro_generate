@@ -3,7 +3,19 @@ import json
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
+import logging
+
+
 load_dotenv()
+
+
+# --- 1. Set up basic logging to stdout ---
+logging.basicConfig(
+    level=logging.INFO, # Adjust to logging.DEBUG for more verbose logs
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 MODEL_ID = os.getenv("MODEL_ID")
 
@@ -16,12 +28,14 @@ class AmazonModel:
         self.top_p = top_p
         self.max_gen_len = max_gen_len
         # Build the response
-        self.response = self.generate_amazon_titan_model()
-        # Verify the response and append
+        self.response = self._invoke_model()
         self.parsed_response = None
+        # Verify the response and append
+        if self.response:
+            self.parsed_response = self._parse_response()
 
 
-    def generate_amazon_titan_model(self) -> dict:
+    def _invoke_model(self) -> dict:
         try:
             response = bedrock.invoke_model(
                 modelId=MODEL_ID,
@@ -33,10 +47,17 @@ class AmazonModel:
                     }
                 })
             )
-            print("Response", response)
+            logger.info(f"Successfully invoked model '{MODEL_ID}'.")
             return response
-        except (ClientError, Exception) as e:
-            print(f"Error: Can't invoke '{MODEL_ID}. Reason: '{e}''")
+        except ClientError as e:
+            logger.error(f"Bedrock ClientError invoking model '{MODEL_ID}': {e.response['Error']['Message']}")
+            return None
+        except ValueError as e:
+            logger.error(f"ValueError while invoking model: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while invoking model '{MODEL_ID}': {e}")
+            return None
 
     def input_token(self):
         response_body = json.loads(self.response.get("body").read())
@@ -53,31 +74,25 @@ class AmazonModel:
         usage = response_body.get("usage")
         return usage.get("totalTokens")
 
-    def generate_meta_model(self) ->dict:
+    def _parse_response(self):
+        if not self.response:
+            logger.warning("No response to parse. The model invocation may have failed.")
+            return None
         try:
-            response = bedrock.invoke_model(
-            modelId=MODEL_ID,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps({
-                "prompt": self.prompt,
-                "max_gen_len": self.max_gen_len,
-                "temperature": self.temp,
-                "top_p": self.top_p
-                })
-            )
-            return response
-        except (ClientError, Exception) as e:
-            print(f"Error: Can't invoke '{MODEL_ID}. Reason: '{e}''")
-    
+            response_body = self.response.get("body").read()
+            parsed_body = json.loads(response_body)
+            logger.debug("Successfully parsed model response body.")
+            return parsed_body
+        except (AttributeError, KeyError) as e:
+            logger.error(f"Error accessing response body or key: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON from model response: {e}")
+            return None
+
+
     def valid_response(self)->bool:
-        model_response = json.loads(self.response["body"].read())
-        if model_response:
-            self.parsed_response = model_response
-            return True
-        else:
-            self.parsed_response = None
-            return False
+        return self.parsed_response is not None
     
     def get_generation(self)->str:
         return self.parsed_response["results"][0]["outputText"]
