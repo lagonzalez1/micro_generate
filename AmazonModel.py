@@ -48,6 +48,7 @@ class AmazonModel:
                 })
             )
             logger.info(f"Successfully invoked model '{MODEL_ID}'.")
+            logger.info(f"Successfully response '{response}'.")
             return response
         except ClientError as e:
             logger.error(f"Bedrock ClientError invoking model '{MODEL_ID}': {e.response['Error']['Message']}")
@@ -92,7 +93,9 @@ class AmazonModel:
 
 
     def valid_response(self)->bool:
-        return self.parsed_response is not None
+        if self.parsed_response:
+            return True
+        return False
     
     def get_generation(self)->str:
         return self.parsed_response["results"][0]["outputText"]

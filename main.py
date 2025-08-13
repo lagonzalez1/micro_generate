@@ -14,8 +14,18 @@ from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import ssl
+import logging
+
 
 load_dotenv()  # loads variables from .env
+
+# --- 1. Set up basic logging to stdout ---
+logging.basicConfig(
+    level=logging.INFO, # Adjust to logging.DEBUG for more verbose logs
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 EXCHANGE     = os.getenv("EXCHANGE")
 QUEUE        = os.getenv("QUEUE")
@@ -33,7 +43,6 @@ def create_callback(db):
             district_data = db.get_district_data((parse_client.get_organization_id(), parse_client.get_district_id()))
             if not district_data:
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-                logging.basicConfig()
                 raise ValueError("Missing district data")
 
             subject_data = db.get_subject_data((parse_client.get_organization_id(), parse_client.get_subject_id()))
@@ -54,7 +63,8 @@ def create_callback(db):
             # Invoke Gemini model for testing
             # model = GeminiModel(prompt=prompt.get_prompt())
             response = model.valid_response()
-            print("The outputkey: ",parse_client.get_output_key())
+            logger.info(f"Valid_response boolean '{response}'.")
+            logger.info(f"The outputkey '{parse_client.get_output_key()}'.")
             if response:
                 try:
                     s3.put_object(
@@ -69,7 +79,7 @@ def create_callback(db):
                     else:
                         channel.basic_nack(delivery_tag=method.delivery_tag,requeue=False)
                 except (BotoCoreError, ClientError) as e:
-                    print("unable to upload to s3", e)
+                    logger.info(f"Unable to upload s3 '{e}'.")
                     channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)                 
             else:
                 # Did not get a response so try again log to db as well

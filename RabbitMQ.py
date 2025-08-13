@@ -77,7 +77,7 @@ class RabbitMQ:
 
 
     def set_callback(self, callback_):
-            self.channel.basic_consume(queue=self.queue, on_message_callback=callback_)
+        self.channel.basic_consume(queue=self.queue, on_message_callback=callback_)
 
     def get_connection(self)->pika.BlockingConnection:
         return self.connection
