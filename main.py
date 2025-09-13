@@ -4,12 +4,12 @@ import logging
 import pika
 import psycopg2
 from dotenv import load_dotenv
-from PostgresClient import PostgresClient 
-from RabbitMQ import RabbitMQ
+from Config.PostgresClient import PostgresClient 
+from Config.RabbitMQ import RabbitMQ
 from Client import Client
 from PromptClient import PromptClient
-from AmazonModel import AmazonModel
-from GeminModel import GeminiModel
+from Models.AmazonModel import AmazonModel
+from Models.GeminModel import GeminiModel
 from google import genai
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -57,11 +57,11 @@ def create_callback(db):
                                   parse_client.get_difficulty())
             print(f"Input token count: '{prompt.get_token_length()}'")
             # Invoke Amazon Bedrock model
-            model = AmazonModel(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=3072)
+            # model = AmazonModel(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=3072)
             #print(f"Total tokens: {model.total_token()} ")
 
             # Invoke Gemini model for testing
-            # model = GeminiModel(prompt=prompt.get_prompt())
+            model = GeminiModel(prompt=prompt.get_prompt())
             response = model.valid_response()
             logger.info(f"Valid_response boolean '{response}'.")
             logger.info(f"The outputkey '{parse_client.get_output_key()}'.")
@@ -69,11 +69,11 @@ def create_callback(db):
                 try:
                     s3.put_object(
                         Bucket="tracker-client-storage",
-                        Key=parse_client.get_output_key(),
+                        Key="assessments/"+parse_client.get_output_key(),
                         Body=model.get_generation(),
                         ContentType='application/json'
                     )
-                    success_request = db.update_question_task(("COMPLETE", parse_client.get_output_key()))
+                    success_request = db.update_question_task(("COMPLETE", prompt.get_token_length(), model.total_token(), parse_client.get_output_key()))
                     if success_request:
                         channel.basic_ack(delivery_tag=method.delivery_tag)
                     else:

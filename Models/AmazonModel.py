@@ -2,6 +2,7 @@ import os
 import json
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+from json import JSONDecodeError
 from dotenv import load_dotenv
 import logging
 
@@ -61,34 +62,45 @@ class AmazonModel:
             return None
 
     def input_token(self):
-        response_body = json.loads(self.response.get("body").read())
-        usage = response_body.get("usage")
-        return usage.get("inputTokens")
+        try:
+            response_body = json.loads(self.response.get("body").read())
+            usage = response_body.get("usage")
+            return usage.get("inputTokens")
+        except (AttributeError, JSONDecodeError) as e:
+            logger.error(f"output token error {e}")
+            return None
 
     def output_token(self):
-        response_body = json.loads(self.response.get("body").read())
-        usage = response_body.get("usage")
-        return usage.get("outputTokens")
+        try:
+            response_body = json.loads(self.response.get("body").read())
+            usage = response_body.get("usage")
+            return usage.get("outputTokens")
+        except (AttributeError, JSONDecodeError) as e:
+            logger.error(f"output token error {e}")
+            return None
 
     def total_token(self):
-        response_body = json.loads(self.response.get("body").read())
-        usage = response_body.get("usage")
-        return usage.get("totalTokens")
+        try:
+            response_body = json.loads(self.response.get("body").read())
+            usage = response_body.get("usage")
+            return usage.get("totalTokens")
+        except (AttributeError, JSONDecodeError) as e:
+            logger.error(f"output token error {e}")
+            return None
 
     def _parse_response(self):
         if not self.response:
             logger.warning("No response to parse. The model invocation may have failed.")
             return None
         try:
-            response_body = self.response.get("body").read()
-            parsed_body = json.loads(response_body)
+            parsed_body = json.loads(self.response.get("body").read())
             logger.debug("Successfully parsed model response body.")
             return parsed_body
+        except JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON from model response: {e}")
+            return None
         except (AttributeError, KeyError) as e:
             logger.error(f"Error accessing response body or key: {e}")
-            return None
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode JSON from model response: {e}")
             return None
 
 
@@ -98,7 +110,14 @@ class AmazonModel:
         return False
     
     def get_generation(self)->str:
-        return self.parsed_response["results"][0]["outputText"]
+        if self.parsed_response is None:
+            return None
+        try:
+            response = self.parsed_response["results"][0]["outputText"]
+            return response
+        except AttributeError as e:
+            return None    
+        
 
 
 

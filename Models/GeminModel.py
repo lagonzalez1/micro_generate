@@ -7,7 +7,6 @@ from google import genai
 
 load_dotenv()
 
-bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 """
@@ -20,7 +19,6 @@ class GeminiModel:
         # Build the response
         self.response = self.generate_gemini()
         # Verify the response and append
-        self.parsed_response = None
 
 
     def generate_gemini(self) -> dict:
@@ -33,6 +31,10 @@ class GeminiModel:
         except (ClientError, Exception) as e:
             print(f"Error: Can't invoke. Reason: '{e}''")
     
+    def total_token(self)->int:
+        compressed = ''.join(self.response.text.split())
+        return (len(compressed) + 2) // 4  
+
     def valid_response(self)->bool:
         if self.response:
             return True

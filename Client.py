@@ -12,6 +12,9 @@ class Client:
         except json.JSONDecodeError as e:
             print("Unable to prase client body")
     
+    def get_process_type(self)-> str:
+        return self.payload.get("process_type")
+
     def get_output_key(self) -> str:
         return self.payload.get("s3_output_key") 
     

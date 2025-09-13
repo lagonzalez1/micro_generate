@@ -97,7 +97,7 @@ class PostgresClient:
         return self.fetch_one(subject_query, params)
     
     def update_question_task(self, params):
-        success_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s WHERE s3_output_key = %s;"
+        success_query = "UPDATE stu_tracker.Generate_questions_task SET status = %s, input_tokens = %s, output_tokens = %s WHERE s3_output_key = %s;"
         self.execute(success_query, params)
         
     def update_question_task_retry(self, params):

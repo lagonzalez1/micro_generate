@@ -27,9 +27,14 @@ class PromptClient:
     def get_prompt(self)->str:
         return self.prompt
     
+    """
+        For certain models the size of a token vary.
+        For gemini, a single token is about 4 chars
+        For amazon, a single token is about 3 chars
+    """
     def get_token_length(self) ->int:
         compressed = ''.join(self.get_prompt().split())
-        return (len(compressed) + 2) // 3
+        return (len(compressed) + 2) // 4
 
 
     
