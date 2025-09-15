@@ -57,11 +57,11 @@ def create_callback(db):
                                   parse_client.get_difficulty())
             print(f"Input token count: '{prompt.get_token_length()}'")
             # Invoke Amazon Bedrock model
-            # model = AmazonModel(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=3072)
+            model = AmazonModel(prompt=prompt.get_prompt(), temp=0.5, top_p=0.9, max_gen_len=3072)
             #print(f"Total tokens: {model.total_token()} ")
 
             # Invoke Gemini model for testing
-            model = GeminiModel(prompt=prompt.get_prompt())
+            #model = GeminiModel(prompt=prompt.get_prompt())
             response = model.valid_response()
             logger.info(f"Valid_response boolean '{response}'.")
             logger.info(f"The outputkey '{parse_client.get_output_key()}'.")
